@@ -42,6 +42,18 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'navigation' => [
+                [
+                    'label' => 'Exercises',
+                    'href' => route('exercises.index', absolute: false),
+                    'name' => 'exercises.index',
+                ],
+                [
+                    'label' => 'How to add',
+                    'href' => route('how-to-add', absolute: false),
+                    'name' => 'how-to-add',
+                ],
+            ],
         ];
     }
 }

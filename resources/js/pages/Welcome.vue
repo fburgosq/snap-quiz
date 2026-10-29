@@ -2,9 +2,9 @@
 import { Head, Link, useForm } from "@inertiajs/vue3";
 import { onBeforeUnmount, ref } from "vue";
 import InputError from "@/components/InputError.vue";
+import SnapQuizHeader from "@/components/SnapQuizHeader.vue";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { home } from "@/routes";
 import { store } from "@/routes/quiz";
 
 interface QuizExercise {
@@ -77,14 +77,7 @@ onBeforeUnmount(() => {
     >
         <Head title="SnapQuiz" />
 
-        <header class="w-full px-6 py-5 sm:px-10">
-            <Link
-                :href="home()"
-                class="text-xl font-bold tracking-tight text-neutral-900 hover:opacity-80 dark:text-neutral-100"
-            >
-                SnapQuiz
-            </Link>
-        </header>
+        <SnapQuizHeader />
 
         <main class="flex flex-1 items-center justify-center px-6 py-12">
             <div class="w-full max-w-md space-y-6">
