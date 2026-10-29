@@ -1,16 +1,10 @@
 <?php
 
-use App\Services\Claude\ExerciseExtractor;
+use App\Http\Controllers\QuizController;
 use Illuminate\Support\Facades\Route;
 
-Route::inertia('/', 'Welcome')->name('home');
-
-// Route::get('/', function () {
-//    $reply = app(ExerciseExtractor::class)->ping('Tell me a one-line sarcastic joke.');
-//    dd('really', $reply);
-//
-//    return $reply;
-// });
+Route::get('/', [QuizController::class, 'index'])->name('home');
+Route::post('/quiz', [QuizController::class, 'store'])->name('quiz.store');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
