@@ -150,3 +150,10 @@ test('shares header navigation links for Exercises and How to add across pages',
             ->where('navigation.1.label', 'How to add')
             ->where('navigation.1.href', '/how-to-add'));
 });
+
+test('login and register routes are disabled and return 404', function (): void {
+    $this->get('/login')->assertNotFound();
+    $this->post('/login')->assertNotFound();
+    $this->get('/register')->assertNotFound();
+    $this->post('/register')->assertNotFound();
+});
