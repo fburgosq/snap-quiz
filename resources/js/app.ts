@@ -1,29 +1,30 @@
 import { createInertiaApp } from "@inertiajs/vue3";
+import type { DefineComponent } from "vue";
 import { initializeTheme } from "@/composables/useAppearance";
-import AppLayout from "@/layouts/AppLayout.vue";
-import AuthLayout from "@/layouts/AuthLayout.vue";
-import SettingsLayout from "@/layouts/settings/Layout.vue";
 import { initializeFlashToast } from "@/lib/flashToast";
 
 const appName = import.meta.env.VITE_APP_NAME || "Laravel";
 
 void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
-    layout: (name) => {
-        switch (true) {
-            case name === "Welcome":
-            case name === "HowToAdd":
-            case name.startsWith("quiz"):
-            case name.startsWith("exercises"):
-                return null;
-            case name.startsWith("auth/"):
-                return AuthLayout;
-            case name.startsWith("settings/"):
-                return [AppLayout, SettingsLayout];
-            default:
-                return AppLayout;
+    resolve: async (name) => {
+        const pages = import.meta.glob<DefineComponent>([
+            "./pages/**/*.vue",
+            "!./pages/auth/**/*.vue",
+            "!./pages/settings/**/*.vue",
+            "!./pages/Dashboard.vue",
+        ]);
+        const page = pages[`./pages/${name}.vue`];
+
+        if (!page) {
+            throw new Error(`Page not found: ${name}`);
         }
+
+        const module = await page();
+
+        return (module as { default?: DefineComponent }).default ?? module;
     },
+    layout: () => null,
     withApp: (app) => {
         app.directive("focus", {
             mounted: (el: HTMLElement, shouldFocus) => {
