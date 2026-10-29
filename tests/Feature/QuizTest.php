@@ -267,3 +267,19 @@ test('deletes the stored image if database import fails after image storage', fu
     $this->assertDatabaseCount('quizzes', 0);
     expect(Storage::disk('local')->allFiles())->toBeEmpty();
 });
+
+test('renders the quiz player page on GET /quiz/{quiz} with eager-loaded items, blanks, and options', function (): void {
+    $quiz = Quiz::factory()->withItems(2)->create([
+        'title' => 'Playable Quiz',
+    ]);
+
+    $response = $this->get(route('quiz.show', $quiz));
+
+    $response->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('quiz/Show')
+            ->where('quiz.uuid', $quiz->uuid)
+            ->where('quiz.title', 'Playable Quiz')
+            ->has('quiz.items', 2)
+            ->has('quiz.items.0.blanks.0.options', 5));
+});

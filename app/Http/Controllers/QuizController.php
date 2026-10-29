@@ -32,6 +32,23 @@ class QuizController extends Controller
     {
         return Inertia::render('Welcome', [
             'quiz' => $request->session()->get('quiz'),
+            'quizUuid' => $request->session()->get('quiz_uuid'),
+        ]);
+    }
+
+    /**
+     * Display the interactive quiz player for a saved quiz.
+     */
+    public function show(Request $request, Quiz $quiz): JsonResponse|Response
+    {
+        $quiz->load('items.blanks.options');
+
+        if ($request->expectsJson()) {
+            return (new QuizResource($quiz))->response();
+        }
+
+        return Inertia::render('quiz/Show', [
+            'quiz' => (new QuizResource($quiz))->resolve($request),
         ]);
     }
 

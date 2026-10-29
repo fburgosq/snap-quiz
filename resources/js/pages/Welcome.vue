@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
-import { onBeforeUnmount, ref } from 'vue';
-import InputError from '@/components/InputError.vue';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { home } from '@/routes';
-import { store } from '@/routes/quiz';
+import { Head, Link, useForm } from "@inertiajs/vue3";
+import { onBeforeUnmount, ref } from "vue";
+import InputError from "@/components/InputError.vue";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { home } from "@/routes";
+import { store } from "@/routes/quiz";
 
 interface QuizExercise {
     sentence: string;
@@ -21,6 +21,7 @@ interface QuizResult {
 
 defineProps<{
     quiz?: QuizResult | null;
+    quizUuid?: string | null;
 }>();
 
 const form = useForm<{
@@ -29,7 +30,7 @@ const form = useForm<{
     image: null,
 });
 
-const selectedFileName = ref<string>('');
+const selectedFileName = ref<string>("");
 const previewUrl = ref<string | null>(null);
 
 function revokePreview(): void {
@@ -45,16 +46,16 @@ function handleFileChange(event: Event): void {
 
     revokePreview();
     form.image = file;
-    form.clearErrors('image');
+    form.clearErrors("image");
 
     if (file !== null) {
         selectedFileName.value = file.name;
 
-        if (file.type.startsWith('image/')) {
+        if (file.type.startsWith("image/")) {
             previewUrl.value = URL.createObjectURL(file);
         }
     } else {
-        selectedFileName.value = '';
+        selectedFileName.value = "";
     }
 }
 
@@ -92,9 +93,7 @@ onBeforeUnmount(() => {
                     @submit.prevent="submit"
                 >
                     <div class="space-y-2">
-                        <Label for="image" class="text-sm font-medium">
-                            Upload Image
-                        </Label>
+                        <Label for="image" class="text-sm font-medium"> Upload Image </Label>
 
                         <input
                             id="image"
@@ -115,9 +114,7 @@ onBeforeUnmount(() => {
                                 :alt="selectedFileName"
                                 class="h-12 w-12 shrink-0 rounded object-cover"
                             />
-                            <p
-                                class="truncate text-xs text-neutral-600 dark:text-neutral-400"
-                            >
+                            <p class="truncate text-xs text-neutral-600 dark:text-neutral-400">
                                 {{ selectedFileName }}
                             </p>
                         </div>
@@ -125,12 +122,8 @@ onBeforeUnmount(() => {
                         <InputError :message="form.errors.image" />
                     </div>
 
-                    <Button
-                        type="submit"
-                        class="w-full"
-                        :disabled="form.processing"
-                    >
-                        {{ form.processing ? 'Creating Quiz...' : 'Create Quiz' }}
+                    <Button type="submit" class="w-full" :disabled="form.processing">
+                        {{ form.processing ? "Creating Quiz..." : "Create Quiz" }}
                     </Button>
                 </form>
 
@@ -150,6 +143,15 @@ onBeforeUnmount(() => {
                             {{ item.sentence }}
                         </li>
                     </ol>
+
+                    <div v-if="quizUuid" class="pt-2">
+                        <Link
+                            :href="`/quiz/${quizUuid}`"
+                            class="inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+                        >
+                            Play Quiz
+                        </Link>
+                    </div>
                 </section>
             </div>
         </main>
