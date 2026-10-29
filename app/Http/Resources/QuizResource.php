@@ -10,6 +10,7 @@ use App\Models\QuizItem;
 use App\Models\QuizOption;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * @mixin Quiz
@@ -32,13 +33,30 @@ class QuizResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $hasImage = $this->hasStoredImage();
+
         return [
             'uuid' => $this->uuid,
             'title' => $this->title,
             'created_at' => $this->created_at?->toISOString(),
             'duplicate' => $this->isDuplicate,
+            'has_image' => $hasImage,
+            'image_url' => $hasImage ? route('exercises.image', $this->uuid) : null,
             'items' => $this->whenLoaded('items', fn (): array => $this->formatItems()),
         ];
+    }
+
+    private function hasStoredImage(): bool
+    {
+        $path = $this->source_image_path;
+
+        if (! is_string($path) || $path === '') {
+            return false;
+        }
+
+        $diskName = (string) config('filesystems.default', 'local');
+
+        return Storage::disk($diskName)->exists($path);
     }
 
     /**

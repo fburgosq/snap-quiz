@@ -22,7 +22,7 @@ class ExerciseController extends Controller
     public function index(Request $request): JsonResponse|RedirectResponse|Response
     {
         $paginator = Quiz::query()
-            ->select(['id', 'uuid', 'title', 'created_at'])
+            ->select(['id', 'uuid', 'title', 'source_image_path', 'created_at'])
             ->forUser($request->user())
             ->withCount('items')
             ->latest('created_at')

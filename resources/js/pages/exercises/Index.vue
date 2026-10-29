@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { Head, Link } from "@inertiajs/vue3";
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import ImageModal from "@/components/quiz/ImageModal.vue";
 import SnapQuizHeader from "@/components/SnapQuizHeader.vue";
 import {
     formatShortDate,
     SNAPQUIZ_UI_STRINGS,
     type PaginatedQuizzes,
     type PaginationLinkItem,
+    type QuizSummaryItem,
 } from "@/lib/navigationStrings";
 import { home } from "@/routes";
 import { show as showQuiz } from "@/routes/quiz";
@@ -31,6 +33,27 @@ const numberedLinks = computed<PaginationLinkItem[]>(() => {
 
     return rawLinks.slice(1, -1);
 });
+
+const modalOpen = ref<boolean>(false);
+const modalImageSrc = ref<string | null>(null);
+const modalQuizTitle = ref<string>("");
+const modalTriggerElement = ref<HTMLElement | null>(null);
+
+function openOriginalImageModal(quiz: QuizSummaryItem, event: MouseEvent): void {
+    if (!quiz.has_image || !quiz.image_url) {
+        return;
+    }
+
+    modalTriggerElement.value =
+        event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    modalImageSrc.value = quiz.image_url;
+    modalQuizTitle.value = quiz.title;
+    modalOpen.value = true;
+}
+
+function closeOriginalImageModal(): void {
+    modalOpen.value = false;
+}
 </script>
 
 <template>
@@ -107,11 +130,54 @@ const numberedLinks = computed<PaginationLinkItem[]>(() => {
                     class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
                 >
                     <li v-for="quiz in items" :key="quiz.uuid" class="flex">
-                        <Link
-                            :href="showQuiz.url(quiz.uuid)"
-                            class="group flex h-full w-full flex-col justify-between rounded-xl border border-neutral-200 bg-white p-4 shadow-xs transition hover:-translate-y-0.5 hover:border-neutral-400 hover:shadow-md focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-600 dark:focus-visible:ring-neutral-100"
+                        <article
+                            class="group/card relative flex h-full w-full flex-col justify-between rounded-xl border border-neutral-200 bg-white p-4 shadow-xs transition hover:-translate-y-0.5 hover:border-neutral-400 hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-600"
                         >
-                            <div class="space-y-3">
+                            <!-- Top-right "View Original Image" button (above stretched link overlay) -->
+                            <div
+                                v-if="quiz.has_image && quiz.image_url"
+                                class="group/tooltip absolute top-2 right-2 z-20"
+                            >
+                                <button
+                                    type="button"
+                                    :aria-label="
+                                        SNAPQUIZ_UI_STRINGS.exercises.viewOriginalImageAriaLabel
+                                    "
+                                    class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:outline-none dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 dark:focus-visible:ring-neutral-100"
+                                    @click.stop.prevent="openOriginalImageModal(quiz, $event)"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        class="h-4.5 w-4.5"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        stroke-width="1.8"
+                                        aria-hidden="true"
+                                    >
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                        <circle cx="8.5" cy="8.5" r="1.5" />
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            d="M21 15l-5-5L5 21"
+                                        />
+                                    </svg>
+                                </button>
+
+                                <!-- Hover & keyboard focus tooltip -->
+                                <span
+                                    role="tooltip"
+                                    class="pointer-events-none invisible absolute -top-9 right-0 z-30 rounded-md bg-neutral-900 px-2.5 py-1 text-xs font-medium whitespace-nowrap text-white opacity-0 shadow-md transition-opacity group-focus-within/tooltip:visible group-focus-within/tooltip:opacity-100 group-hover/tooltip:visible group-hover/tooltip:opacity-100 dark:bg-neutral-100 dark:text-neutral-900"
+                                >
+                                    {{ SNAPQUIZ_UI_STRINGS.exercises.viewOriginalImageTooltip }}
+                                </span>
+                            </div>
+
+                            <div
+                                class="space-y-3"
+                                :class="quiz.has_image && quiz.image_url ? 'pr-11' : ''"
+                            >
                                 <div class="flex flex-wrap items-center justify-between gap-2">
                                     <span
                                         class="inline-flex items-center rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200"
@@ -134,24 +200,27 @@ const numberedLinks = computed<PaginationLinkItem[]>(() => {
 
                                 <h2
                                     :title="quiz.title"
-                                    class="line-clamp-2 break-words text-base font-semibold leading-snug text-neutral-900 group-hover:text-neutral-700 dark:text-neutral-100 dark:group-hover:text-neutral-300"
+                                    class="line-clamp-2 break-words text-base font-semibold leading-snug text-neutral-900 group-hover/card:text-neutral-700 dark:text-neutral-100 dark:group-hover/card:text-neutral-300"
                                 >
                                     {{ quiz.title }}
                                 </h2>
                             </div>
 
-                            <div
-                                class="mt-5 flex items-center justify-between border-t border-neutral-100 pt-3 text-sm font-semibold text-neutral-900 dark:border-neutral-800 dark:text-neutral-100"
+                            <!-- Stretched link covering the card without nesting the icon button -->
+                            <Link
+                                :href="showQuiz.url(quiz.uuid)"
+                                :aria-label="`${SNAPQUIZ_UI_STRINGS.exercises.startCta}: ${quiz.title}`"
+                                class="mt-5 flex items-center justify-between border-t border-neutral-100 pt-3 text-sm font-semibold text-neutral-900 after:absolute after:inset-0 after:z-10 after:rounded-xl after:content-[''] focus-visible:outline-none after:focus-visible:ring-2 after:focus-visible:ring-neutral-900 after:focus-visible:ring-offset-2 dark:border-neutral-800 dark:text-neutral-100 dark:after:focus-visible:ring-neutral-100"
                             >
                                 <span>{{ SNAPQUIZ_UI_STRINGS.exercises.startCta }}</span>
                                 <span
                                     aria-hidden="true"
-                                    class="transition-transform group-hover:translate-x-0.5"
+                                    class="transition-transform group-hover/card:translate-x-0.5"
                                 >
                                     &rarr;
                                 </span>
-                            </div>
-                        </Link>
+                            </Link>
+                        </article>
                     </li>
                 </ul>
 
@@ -232,5 +301,14 @@ const numberedLinks = computed<PaginationLinkItem[]>(() => {
                 </nav>
             </section>
         </main>
+
+        <!-- Single page-level ImageModal instance -->
+        <ImageModal
+            :open="modalOpen"
+            :src="modalImageSrc"
+            :title="modalQuizTitle"
+            :trigger-element="modalTriggerElement"
+            @close="closeOriginalImageModal"
+        />
     </div>
 </template>

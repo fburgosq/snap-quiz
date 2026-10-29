@@ -3,6 +3,8 @@ export interface QuizSummaryItem {
     title: string;
     items_count: number;
     created_at: string | null;
+    has_image?: boolean;
+    image_url?: string | null;
 }
 
 export interface PaginationLinkItem {
@@ -50,6 +52,8 @@ export const SNAPQUIZ_UI_STRINGS = {
         questionCountBadge: (count: number): string =>
             count === 1 ? "1 question" : `${count} questions`,
         startCta: "Start",
+        viewOriginalImageTooltip: "View Original Image",
+        viewOriginalImageAriaLabel: "View original image",
         emptyHeading: "No exercises yet",
         emptyDescription:
             "Upload a picture of a fill-in-the-blank worksheet to create your first interactive quiz.",

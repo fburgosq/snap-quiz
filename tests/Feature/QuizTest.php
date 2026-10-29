@@ -268,9 +268,16 @@ test('deletes the stored image if database import fails after image storage', fu
     expect(Storage::disk('local')->allFiles())->toBeEmpty();
 });
 
-test('renders the quiz player page on GET /quiz/{quiz} with eager-loaded items, blanks, and options', function (): void {
+test('renders the quiz player page on GET /quiz/{quiz} with eager-loaded items, blanks, options, and safe image metadata', function (): void {
+    Storage::fake('local');
+
+    $fakeImage = UploadedFile::fake()->image('playable.png', 200, 150);
+    $storedPath = $fakeImage->storeAs('quizzes/2026/10', 'playable.png', ['disk' => 'local']);
+
     $quiz = Quiz::factory()->withItems(2)->create([
         'title' => 'Playable Quiz',
+        'source_image_path' => $storedPath,
+        'source_image_hash' => str_repeat('b', 64),
     ]);
 
     $response = $this->get(route('quiz.show', $quiz));
@@ -280,6 +287,11 @@ test('renders the quiz player page on GET /quiz/{quiz} with eager-loaded items, 
             ->component('quiz/Show')
             ->where('quiz.uuid', $quiz->uuid)
             ->where('quiz.title', 'Playable Quiz')
+            ->where('quiz.has_image', true)
+            ->where('quiz.image_url', route('exercises.image', $quiz->uuid))
+            ->missing('quiz.source_image_path')
+            ->missing('quiz.source_image_hash')
+            ->missing('quiz.raw_response')
             ->has('quiz.items', 2)
             ->has('quiz.items.0.blanks.0.options', 5));
 });

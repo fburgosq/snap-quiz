@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import FeedbackPanel from "@/components/quiz/FeedbackPanel.vue";
+import ImageModal from "@/components/quiz/ImageModal.vue";
 import ModeSelector from "@/components/quiz/ModeSelector.vue";
 import QuestionMultipleChoice from "@/components/quiz/QuestionMultipleChoice.vue";
 import QuestionOpenAnswer from "@/components/quiz/QuestionOpenAnswer.vue";
@@ -8,6 +9,7 @@ import QuestionYesNo from "@/components/quiz/QuestionYesNo.vue";
 import QuizProgress from "@/components/quiz/QuizProgress.vue";
 import QuizResults from "@/components/quiz/QuizResults.vue";
 import SentenceDisplay from "@/components/quiz/SentenceDisplay.vue";
+import { Button } from "@/components/ui/button";
 import { useQuizSession } from "@/composables/useQuizSession";
 import {
     QUIZ_STRINGS,
@@ -46,6 +48,27 @@ const {
 
 const questionContainerRef = ref<HTMLElement | null>(null);
 const nextButtonRef = ref<HTMLButtonElement | null>(null);
+
+const isImageModalOpen = ref<boolean>(false);
+const imageModalTriggerRef = ref<HTMLElement | null>(null);
+
+const hasOriginalImage = computed<boolean>(() =>
+    Boolean(props.quiz.has_image && props.quiz.image_url),
+);
+
+function openImageModal(event: MouseEvent): void {
+    if (!hasOriginalImage.value) {
+        return;
+    }
+
+    imageModalTriggerRef.value =
+        event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    isImageModalOpen.value = true;
+}
+
+function closeImageModal(): void {
+    isImageModalOpen.value = false;
+}
 
 const currentMultipleChoiceOptions = computed<Record<number, QuizOptionData[]>>(() => {
     const item = currentItem.value;
@@ -99,24 +122,50 @@ watch([currentIndex, phase], async ([newIndex, newPhase]) => {
 
 <template>
     <div
-        class="mx-auto w-full max-w-2xl rounded-2xl border border-neutral-200 bg-white p-5 shadow-xs sm:p-8 dark:border-neutral-800 dark:bg-neutral-900"
+        class="mx-auto w-full max-w-2xl space-y-6 rounded-2xl border border-neutral-200 bg-white p-5 shadow-xs sm:p-8 dark:border-neutral-800 dark:bg-neutral-900"
     >
-        <!-- Empty state for 0 items -->
-        <div v-if="totalQuestions === 0" class="py-8 text-center">
-            <h1 class="text-lg font-bold text-neutral-900 dark:text-neutral-100">
+        <!-- Persistent quiz header row: Title + "View Image" button reachable across all phases -->
+        <div class="flex items-start justify-between gap-3">
+            <h1
+                class="min-w-0 flex-1 text-xl font-bold break-words text-neutral-900 sm:text-2xl dark:text-neutral-100"
+            >
                 {{ quiz.title || QUIZ_STRINGS.emptyQuizTitle }}
             </h1>
-            <p class="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+
+            <Button
+                v-if="hasOriginalImage"
+                type="button"
+                variant="outline"
+                :aria-label="QUIZ_STRINGS.viewOriginalImageAriaLabel"
+                class="min-h-11 min-w-11 shrink-0 gap-2 px-3 sm:px-3.5"
+                @click="openImageModal"
+            >
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-4.5 w-4.5 shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    aria-hidden="true"
+                >
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 15l-5-5L5 21" />
+                </svg>
+                <span class="hidden sm:inline">{{ QUIZ_STRINGS.viewImageButton }}</span>
+            </Button>
+        </div>
+
+        <!-- Empty state for 0 items -->
+        <div v-if="totalQuestions === 0" class="py-6 text-center">
+            <p class="text-sm text-neutral-600 dark:text-neutral-400">
                 {{ QUIZ_STRINGS.emptyQuizMessage }}
             </p>
         </div>
 
         <!-- Phase 1: Mode Selection -->
         <div v-else-if="phase === 'mode'" class="space-y-6">
-            <h1 class="text-xl font-bold text-neutral-900 sm:text-2xl dark:text-neutral-100">
-                {{ quiz.title }}
-            </h1>
-
             <ModeSelector @select="selectMode" />
         </div>
 
@@ -126,13 +175,7 @@ watch([currentIndex, phase], async ([newIndex, newPhase]) => {
             ref="questionContainerRef"
             class="space-y-6"
         >
-            <div class="space-y-3">
-                <h1 class="text-lg font-bold text-neutral-900 sm:text-xl dark:text-neutral-100">
-                    {{ quiz.title }}
-                </h1>
-
-                <QuizProgress :current="currentIndex + 1" :total="totalQuestions" />
-            </div>
+            <QuizProgress :current="currentIndex + 1" :total="totalQuestions" />
 
             <div
                 class="rounded-xl border border-neutral-200 bg-neutral-50/70 p-4 sm:p-5 dark:border-neutral-800 dark:bg-neutral-950/60"
@@ -194,6 +237,15 @@ watch([currentIndex, phase], async ([newIndex, newPhase]) => {
             :summaries="itemSummaries"
             @try-again="tryAgain"
             @change-mode="changeMode"
+        />
+
+        <!-- Reusable Original Image Modal -->
+        <ImageModal
+            :open="isImageModalOpen"
+            :src="quiz.image_url ?? null"
+            :title="quiz.title"
+            :trigger-element="imageModalTriggerRef"
+            @close="closeImageModal"
         />
     </div>
 </template>

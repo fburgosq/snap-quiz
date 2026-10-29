@@ -24,6 +24,8 @@ export interface QuizData {
     title: string;
     created_at?: string | null;
     duplicate?: boolean;
+    has_image?: boolean;
+    image_url?: string | null;
     items: QuizItemData[];
 }
 
@@ -92,6 +94,14 @@ export const QUIZ_STRINGS = {
     tryAgainButton: "Try again",
     changeModeButton: "Change mode",
     blankSkippedNotice: "No options available for this blank.",
+    viewImageButton: "View Image",
+    viewOriginalImageAriaLabel: "View original image",
+    viewOriginalImageTooltip: "View Original Image",
+    modalAriaLabel: (title: string): string => `Original image: ${title}`,
+    modalImageAlt: (title: string): string => `Original image of the exercise: ${title}`,
+    modalCloseAriaLabel: "Close image preview",
+    modalLoadingLabel: "Loading original image...",
+    modalErrorMessage: "The original image could not be loaded",
 } as const;
 
 /**
