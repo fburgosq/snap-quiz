@@ -15,14 +15,22 @@ use Illuminate\Support\Sleep;
 
 beforeEach(function (): void {
     config([
+        'services.ai.provider' => 'anthropic',
         'services.anthropic.key' => 'test-anthropic-key',
         'services.anthropic.base_url' => 'https://api.anthropic.com',
         'services.anthropic.version' => '2023-06-01',
-        'services.anthropic.model' => 'claude-sonnet-5-5',
+        'services.anthropic.model' => 'claude-haiku-4-5',
         'services.anthropic.max_tokens' => 8192,
         'services.anthropic.timeout' => 120,
         'services.anthropic.max_image_bytes' => 5 * 1024 * 1024,
         'services.anthropic.resize_max_edge' => 1568,
+        'services.openai.key' => 'test-openai-key',
+        'services.openai.base_url' => 'https://api.openai.com',
+        'services.openai.model' => 'gpt-4o-mini',
+        'services.openai.max_tokens' => 8192,
+        'services.openai.timeout' => 120,
+        'services.openai.max_image_bytes' => 5 * 1024 * 1024,
+        'services.openai.resize_max_edge' => 1568,
     ]);
 });
 
@@ -50,7 +58,7 @@ function claudeSuccessBody(array|string $contentText = [
         'id' => 'msg_01Test',
         'type' => 'message',
         'role' => 'assistant',
-        'model' => 'claude-sonnet-5-5',
+        'model' => 'claude-haiku-4-5',
         'stop_reason' => $stopReason,
         'content' => [
             [
@@ -105,7 +113,7 @@ test('extracts exercises from an uploaded image and sends expected headers, prom
             && $request->hasHeader('x-api-key', 'test-anthropic-key')
             && $request->hasHeader('anthropic-version', '2023-06-01')
             && str_contains($request->header('content-type')[0] ?? '', 'application/json')
-            && $data['model'] === 'claude-sonnet-5-5'
+            && $data['model'] === 'claude-haiku-4-5'
             && $data['max_tokens'] === 8192
             && $data['system'] === $expectedPrompt
             && ! array_key_exists('temperature', $data)
@@ -123,7 +131,7 @@ test('extracts exercises from an uploaded image and sends expected headers, prom
     Log::shouldHaveReceived('info')
         ->once()
         ->withArgs(fn (string $message, array $context): bool => $message === 'Claude exercise extraction completed.'
-            && $context['model'] === 'claude-sonnet-5-5'
+            && $context['model'] === 'claude-haiku-4-5'
             && $context['input_tokens'] === 420
             && $context['output_tokens'] === 115
             && $context['request_id'] === 'req_abc123'
@@ -133,7 +141,7 @@ test('extracts exercises from an uploaded image and sends expected headers, prom
 
 test('extracts exercises when given a local file path and respects configured model', function (): void {
     Http::preventStrayRequests();
-    config(['services.anthropic.model' => 'claude-haiku-4-5']);
+    config(['services.anthropic.model' => 'claude-sonnet-4-5']);
 
     Http::fake([
         'https://api.anthropic.com/v1/messages' => Http::response(claudeSuccessBody()),
@@ -146,7 +154,7 @@ test('extracts exercises when given a local file path and respects configured mo
 
     expect($result['title'])->toBe('World Capitals');
 
-    Http::assertSent(fn (Request $request): bool => $request['model'] === 'claude-haiku-4-5'
+    Http::assertSent(fn (Request $request): bool => $request['model'] === 'claude-sonnet-4-5'
         && $request['messages'][0]['content'][0]['source']['media_type'] === 'image/jpeg');
 });
 
@@ -416,4 +424,162 @@ test('logs soft warnings without throwing when blanks or distractors violate sof
     Log::shouldHaveReceived('warning')
         ->withArgs(fn (string $message): bool => str_contains($message, 'equals a correct answer'))
         ->once();
+});
+
+test('sends a simple text prompt with ping and returns the response text', function (): void {
+    Http::preventStrayRequests();
+
+    Http::fake([
+        'https://api.anthropic.com/v1/messages' => Http::response(claudeSuccessBody('OK')),
+    ]);
+
+    $response = app(ExerciseExtractor::class)->ping('Say OK');
+
+    expect($response)->toBe('OK');
+
+    Http::assertSent(fn (Request $request): bool => $request['model'] === 'claude-haiku-4-5'
+        && $request['max_tokens'] === 256
+        && $request['messages'][0]['role'] === 'user'
+        && $request['messages'][0]['content'] === 'Say OK');
+});
+
+/**
+ * @param  array<string, mixed>|string  $contentText
+ * @return array<string, mixed>
+ */
+function openAiSuccessBody(array|string $contentText = [
+    'title' => 'World Capitals',
+    'exercise' => [
+        [
+            'sentence' => 'The capital of France is ____.',
+            'correct' => 'Paris',
+            'incorrect' => ['Lyon', 'Marseille', 'Toulouse', 'Nice'],
+            'reason' => 'Paris is the capital and largest city of France.',
+        ],
+    ],
+], string $finishReason = 'stop'): array
+{
+    $text = is_array($contentText)
+        ? (string) json_encode($contentText, JSON_THROW_ON_ERROR)
+        : $contentText;
+
+    return [
+        'id' => 'chatcmpl-test123',
+        'object' => 'chat.completion',
+        'model' => 'gpt-4o-mini',
+        'choices' => [
+            [
+                'index' => 0,
+                'finish_reason' => $finishReason,
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => $text,
+                ],
+            ],
+        ],
+        'usage' => [
+            'prompt_tokens' => 380,
+            'completion_tokens' => 95,
+            'total_tokens' => 475,
+        ],
+    ];
+}
+
+test('extracts exercises using OpenAI provider with valid chat completions payload and bearer header', function (): void {
+    Http::preventStrayRequests();
+    Log::spy();
+    config(['services.ai.provider' => 'openai']);
+
+    Http::fake([
+        'https://api.openai.com/v1/chat/completions' => Http::response(
+            openAiSuccessBody(),
+            200,
+            ['x-request-id' => 'req_openai_789'],
+        ),
+    ]);
+
+    $image = UploadedFile::fake()->image('worksheet.png', 200, 150);
+    $result = app(ExerciseExtractor::class)->extract($image);
+
+    expect($result)->toBe([
+        'title' => 'World Capitals',
+        'exercise' => [
+            [
+                'sentence' => 'The capital of France is ____.',
+                'correct' => 'Paris',
+                'incorrect' => ['Lyon', 'Marseille', 'Toulouse', 'Nice'],
+                'reason' => 'Paris is the capital and largest city of France.',
+            ],
+        ],
+    ]);
+
+    $expectedPrompt = file_get_contents(resource_path('prompts/fill-in-the-blank-extractor.txt'));
+
+    Http::assertSent(function (Request $request) use ($expectedPrompt): bool {
+        $data = $request->data();
+        $userContent = $data['messages'][1]['content'] ?? [];
+        $imageUrl = $userContent[0]['image_url']['url'] ?? '';
+
+        return $request->url() === 'https://api.openai.com/v1/chat/completions'
+            && $request->method() === 'POST'
+            && $request->hasHeader('Authorization', 'Bearer test-openai-key')
+            && ! $request->hasHeader('x-api-key')
+            && $data['model'] === 'gpt-4o-mini'
+            && $data['max_completion_tokens'] === 8192
+            && ($data['response_format']['type'] ?? null) === 'json_object'
+            && ($data['messages'][0]['role'] ?? null) === 'system'
+            && ($data['messages'][0]['content'] ?? null) === $expectedPrompt
+            && ($data['messages'][1]['role'] ?? null) === 'user'
+            && ($userContent[0]['type'] ?? null) === 'image_url'
+            && is_string($imageUrl)
+            && str_starts_with($imageUrl, 'data:image/png;base64,')
+            && ($userContent[1]['type'] ?? null) === 'text'
+            && ($userContent[1]['text'] ?? null) === 'Analyze the attached image and return the JSON object exactly as specified.';
+    });
+
+    Log::shouldHaveReceived('info')
+        ->once()
+        ->withArgs(fn (string $message, array $context): bool => $message === 'Claude exercise extraction completed.'
+            && $context['provider'] === 'openai'
+            && $context['model'] === 'gpt-4o-mini'
+            && $context['input_tokens'] === 380
+            && $context['output_tokens'] === 95
+            && $context['request_id'] === 'req_openai_789'
+            && $context['exercises_count'] === 1);
+});
+
+test('sends a simple text prompt with ping using OpenAI provider', function (): void {
+    Http::preventStrayRequests();
+    config(['services.ai.provider' => 'chatgpt']);
+
+    Http::fake([
+        'https://api.openai.com/v1/chat/completions' => Http::response(openAiSuccessBody('OK')),
+    ]);
+
+    $response = app(ExerciseExtractor::class)->ping('Say OK');
+
+    expect($response)->toBe('OK');
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.openai.com/v1/chat/completions'
+        && $request->hasHeader('Authorization', 'Bearer test-openai-key')
+        && $request['model'] === 'gpt-4o-mini'
+        && $request['max_completion_tokens'] === 256
+        && $request['messages'][0]['role'] === 'user'
+        && $request['messages'][0]['content'] === 'Say OK');
+});
+
+test('throws InvalidClaudeResponseException when OpenAI finish_reason is length', function (): void {
+    Http::preventStrayRequests();
+    config(['services.ai.provider' => 'openai']);
+
+    Http::fake([
+        'https://api.openai.com/v1/chat/completions' => Http::response(
+            openAiSuccessBody('{"title": "Truncated', 'length'),
+        ),
+    ]);
+
+    $image = UploadedFile::fake()->image('worksheet.png', 100, 100);
+
+    expect(fn (): array => app(ExerciseExtractor::class)->extract($image))
+        ->toThrow(InvalidClaudeResponseException::class, 'finish_reason is "length"');
 });

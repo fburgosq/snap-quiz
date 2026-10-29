@@ -20,7 +20,7 @@ use JsonException;
 use Throwable;
 
 /**
- * Extracts structured fill-in-the-blank exercises from an image using Anthropic Claude.
+ * Extracts structured fill-in-the-blank exercises from an image using Anthropic Claude or OpenAI ChatGPT.
  *
  * Usage example:
  * ```php
@@ -52,6 +52,8 @@ class ExerciseExtractor
 
     private const string USER_INSTRUCTION = 'Analyze the attached image and return the JSON object exactly as specified.';
 
+    private readonly AiProvider $provider;
+
     private readonly string $apiKey;
 
     private readonly string $baseUrl;
@@ -82,14 +84,19 @@ class ExerciseExtractor
         ?int $maxImageBytes = null,
         ?int $resizeMaxEdge = null,
         ?string $promptPath = null,
+        AiProvider|string|null $provider = null,
     ) {
+        $this->provider = $provider instanceof AiProvider
+            ? $provider
+            : AiProvider::fromConfig($provider);
+
         /** @var array<string, mixed> $config */
-        $config = (array) config('services.anthropic', []);
+        $config = (array) config("services.{$this->provider->configKey()}", []);
 
         $this->apiKey = $apiKey ?? (string) ($config['key'] ?? '');
-        $this->baseUrl = $baseUrl ?? (string) ($config['base_url'] ?? 'https://api.anthropic.com');
+        $this->baseUrl = $baseUrl ?? (string) ($config['base_url'] ?? $this->provider->defaultBaseUrl());
         $this->version = $version ?? (string) ($config['version'] ?? '2023-06-01');
-        $this->model = $model ?? (string) ($config['model'] ?? '');
+        $this->model = $model ?? (string) ($config['model'] ?? $this->provider->defaultModel());
         $this->maxTokens = $maxTokens ?? (int) ($config['max_tokens'] ?? 8192);
         $this->timeout = $timeout ?? (int) ($config['timeout'] ?? 120);
         $this->maxImageBytes = $maxImageBytes ?? (int) ($config['max_image_bytes'] ?? 5 * 1024 * 1024);
@@ -136,6 +143,7 @@ class ExerciseExtractor
         $validated = $this->validate($decoded);
 
         Log::info('Claude exercise extraction completed.', [
+            'provider' => $this->provider->value,
             'model' => $result['model'],
             'input_tokens' => $result['input_tokens'],
             'output_tokens' => $result['output_tokens'],
@@ -145,6 +153,19 @@ class ExerciseExtractor
         ]);
 
         return $validated;
+    }
+
+    /**
+     * Send a simple text prompt to the configured AI provider to verify API connectivity and credentials.
+     *
+     * @throws ClaudeApiException
+     * @throws InvalidClaudeResponseException
+     */
+    public function ping(string $prompt = 'Reply with "OK" to confirm the API connection is working.'): string
+    {
+        $result = $this->send($this->buildPingPayload($prompt));
+
+        return $result['text'];
     }
 
     private function loadPrompt(): string
@@ -266,13 +287,44 @@ class ExerciseExtractor
     }
 
     /**
-     * Build the request payload for the Anthropic Messages API.
+     * Build the request payload for the configured AI provider.
      *
      * @param  array{media_type: string, data: string}  $image
      * @return array<string, mixed>
      */
     private function buildPayload(string $prompt, array $image): array
     {
+        if ($this->provider === AiProvider::OpenAi) {
+            return [
+                'model' => $this->model,
+                'max_completion_tokens' => $this->maxTokens,
+                'response_format' => [
+                    'type' => 'json_object',
+                ],
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => $prompt,
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => [
+                            [
+                                'type' => 'image_url',
+                                'image_url' => [
+                                    'url' => "data:{$image['media_type']};base64,{$image['data']}",
+                                ],
+                            ],
+                            [
+                                'type' => 'text',
+                                'text' => self::USER_INSTRUCTION,
+                            ],
+                        ],
+                    ],
+                ],
+            ];
+        }
+
         return [
             'model' => $this->model,
             'max_tokens' => $this->maxTokens,
@@ -300,7 +352,39 @@ class ExerciseExtractor
     }
 
     /**
-     * Send the request to the Anthropic Messages API and extract response metadata.
+     * Build a simple text-only payload for connectivity checks.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildPingPayload(string $prompt): array
+    {
+        if ($this->provider === AiProvider::OpenAi) {
+            return [
+                'model' => $this->model,
+                'max_completion_tokens' => 256,
+                'messages' => [
+                    [
+                        'role' => 'user',
+                        'content' => $prompt,
+                    ],
+                ],
+            ];
+        }
+
+        return [
+            'model' => $this->model,
+            'max_tokens' => 256,
+            'messages' => [
+                [
+                    'role' => 'user',
+                    'content' => $prompt,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Send the request to the configured AI provider and extract response metadata.
      *
      * @param  array<string, mixed>  $payload
      * @return array{
@@ -316,13 +400,17 @@ class ExerciseExtractor
     {
         $startTime = hrtime(true);
 
+        $headers = $this->provider === AiProvider::OpenAi
+            ? ['Authorization' => "Bearer {$this->apiKey}"]
+            : [
+                'x-api-key' => $this->apiKey,
+                'anthropic-version' => $this->version,
+            ];
+
         try {
             /** @var Response $response */
             $response = Http::baseUrl(rtrim($this->baseUrl, '/'))
-                ->withHeaders([
-                    'x-api-key' => $this->apiKey,
-                    'anthropic-version' => $this->version,
-                ])
+                ->withHeaders($headers)
                 ->asJson()
                 ->acceptJson()
                 ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
@@ -333,10 +421,10 @@ class ExerciseExtractor
                     fn (Throwable $exception): bool => $this->shouldRetry($exception),
                     throw: false,
                 )
-                ->post('/v1/messages', $payload);
+                ->post($this->provider->endpoint(), $payload);
         } catch (ConnectionException $exception) {
             throw new ClaudeApiException(
-                message: 'Failed to connect to the Anthropic API.',
+                message: "Failed to connect to the {$this->provider->value} API.",
                 statusCode: 0,
                 errorType: 'connection_error',
                 requestId: null,
@@ -345,18 +433,21 @@ class ExerciseExtractor
         }
 
         $durationMs = (int) round((hrtime(true) - $startTime) / 1_000_000);
-        $requestId = $response->header('request-id') !== '' ? $response->header('request-id') : null;
+        $requestIdHeader = $response->header('request-id') !== ''
+            ? $response->header('request-id')
+            : $response->header('x-request-id');
+        $requestId = $requestIdHeader !== '' ? $requestIdHeader : null;
 
         if (! $response->successful()) {
             /** @var array<string, mixed> $errorBody */
             $errorBody = is_array($response->json()) ? $response->json() : [];
-            $errorType = data_get($errorBody, 'error.type');
+            $errorType = data_get($errorBody, 'error.type') ?? data_get($errorBody, 'error.code');
             $errorMessage = data_get($errorBody, 'error.message');
 
             throw new ClaudeApiException(
                 message: is_string($errorMessage) && $errorMessage !== ''
                     ? $errorMessage
-                    : "Anthropic API request failed with HTTP status {$response->status()}.",
+                    : "API request failed with HTTP status {$response->status()}.",
                 statusCode: $response->status(),
                 errorType: is_string($errorType) && $errorType !== '' ? $errorType : null,
                 requestId: $requestId,
@@ -366,6 +457,24 @@ class ExerciseExtractor
         /** @var array<string, mixed> $body */
         $body = is_array($response->json()) ? $response->json() : [];
 
+        return $this->provider === AiProvider::OpenAi
+            ? $this->extractOpenAiResponse($body, $durationMs, $requestId)
+            : $this->extractAnthropicResponse($body, $durationMs, $requestId);
+    }
+
+    /**
+     * @param  array<string, mixed>  $body
+     * @return array{
+     *     text: string,
+     *     model: string,
+     *     input_tokens: ?int,
+     *     output_tokens: ?int,
+     *     duration_ms: int,
+     *     request_id: ?string
+     * }
+     */
+    private function extractAnthropicResponse(array $body, int $durationMs, ?string $requestId): array
+    {
         if (($body['stop_reason'] ?? null) === 'max_tokens') {
             throw new InvalidClaudeResponseException(
                 'Claude response was truncated because stop_reason is "max_tokens". Consider increasing ANTHROPIC_MAX_TOKENS.'
@@ -385,6 +494,54 @@ class ExerciseExtractor
 
         $inputTokens = data_get($body, 'usage.input_tokens');
         $outputTokens = data_get($body, 'usage.output_tokens');
+        $responseModel = $body['model'] ?? null;
+
+        return [
+            'text' => $text,
+            'model' => is_string($responseModel) && $responseModel !== '' ? $responseModel : $this->model,
+            'input_tokens' => is_int($inputTokens) ? $inputTokens : null,
+            'output_tokens' => is_int($outputTokens) ? $outputTokens : null,
+            'duration_ms' => $durationMs,
+            'request_id' => $requestId,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $body
+     * @return array{
+     *     text: string,
+     *     model: string,
+     *     input_tokens: ?int,
+     *     output_tokens: ?int,
+     *     duration_ms: int,
+     *     request_id: ?string
+     * }
+     */
+    private function extractOpenAiResponse(array $body, int $durationMs, ?string $requestId): array
+    {
+        $finishReason = data_get($body, 'choices.0.finish_reason');
+
+        if ($finishReason === 'length') {
+            throw new InvalidClaudeResponseException(
+                'OpenAI response was truncated because finish_reason is "length". Consider increasing OPENAI_MAX_TOKENS.'
+            );
+        }
+
+        $messageContent = data_get($body, 'choices.0.message.content');
+        $text = '';
+
+        if (is_string($messageContent)) {
+            $text = $messageContent;
+        } elseif (is_array($messageContent)) {
+            foreach ($messageContent as $part) {
+                if (is_array($part) && ($part['type'] ?? null) === 'text' && is_string($part['text'] ?? null)) {
+                    $text .= $part['text'];
+                }
+            }
+        }
+
+        $inputTokens = data_get($body, 'usage.prompt_tokens');
+        $outputTokens = data_get($body, 'usage.completion_tokens');
         $responseModel = $body['model'] ?? null;
 
         return [

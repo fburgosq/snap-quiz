@@ -35,15 +35,29 @@ return [
         ],
     ],
 
+    'ai' => [
+        'provider' => env('AI_PROVIDER', 'anthropic'),
+    ],
+
     'anthropic' => [
         'key' => env('ANTHROPIC_API_KEY'),
         'base_url' => env('ANTHROPIC_BASE_URL', 'https://api.anthropic.com'),
         'version' => env('ANTHROPIC_VERSION', '2023-06-01'),
-        'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-5-5'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-haiku-4-5'),
         'max_tokens' => env('ANTHROPIC_MAX_TOKENS', 8192),
         'timeout' => env('ANTHROPIC_TIMEOUT', 120),
         'max_image_bytes' => 5 * 1024 * 1024,
         'resize_max_edge' => env('ANTHROPIC_RESIZE_MAX_EDGE', 1568),
+    ],
+
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+        'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com'),
+        'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        'max_tokens' => env('OPENAI_MAX_TOKENS', 8192),
+        'timeout' => env('OPENAI_TIMEOUT', 120),
+        'max_image_bytes' => 5 * 1024 * 1024,
+        'resize_max_edge' => env('OPENAI_RESIZE_MAX_EDGE', 1568),
     ],
 
 ];
