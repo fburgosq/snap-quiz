@@ -46,7 +46,8 @@ class QuizController extends Controller
             ]);
         }
 
-        dd($quiz);
+        /** Store in database quiz data HERE */
+
         return to_route('home')->with('quiz', $quiz);
     }
 }

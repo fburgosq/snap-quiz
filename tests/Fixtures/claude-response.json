@@ -1,0 +1,32 @@
+{
+  "title": "English Grammar & World Geography",
+  "exercise": [
+    {
+      "sentence": "The capital of France is ____.",
+      "correct": "Paris",
+      "incorrect": ["Lyon", "Marseille", "Toulouse", "Nice"],
+      "reason": "Paris is the capital and largest city of France."
+    },
+    {
+      "sentence": "My favorite ____ is blue.",
+      "correct": ["color", "colour"],
+      "incorrect": ["flavor", "sound", "weight", "height"],
+      "reason": "Both American 'color' and British 'colour' are valid spellings for the hue blue."
+    },
+    {
+      "sentence": "She ____ to school every morning and ____ her friends at the gate.",
+      "correct": ["walks", "meets"],
+      "incorrect": [
+        "walk",
+        "walking",
+        "walked",
+        "to walk",
+        "meet",
+        "meeting",
+        "met",
+        "to meet"
+      ],
+      "reason": "Third-person singular in the present simple tense requires adding -s to both verbs."
+    }
+  ]
+}
