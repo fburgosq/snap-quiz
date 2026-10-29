@@ -99,7 +99,8 @@ class QuizImporter
                     $seen = [];
 
                     foreach ($correctByBlank[$blankPosition] ?? [] as $correctText) {
-                        $normalizedKey = $this->normalizeOptionKey($correctText);
+                        $trimmedText = trim($correctText);
+                        $normalizedKey = $this->normalizeOptionKey($trimmedText);
 
                         if ($normalizedKey === '' || isset($seen[$normalizedKey])) {
                             continue;
@@ -108,7 +109,7 @@ class QuizImporter
                         $seen[$normalizedKey] = true;
                         $optionRows[] = [
                             'quiz_blank_id' => $blank->id,
-                            'text' => $correctText,
+                            'text' => $trimmedText,
                             'is_correct' => true,
                             'created_at' => $now,
                             'updated_at' => $now,
@@ -116,7 +117,8 @@ class QuizImporter
                     }
 
                     foreach ($incorrectByBlank[$blankPosition] ?? [] as $incorrectText) {
-                        $normalizedKey = $this->normalizeOptionKey($incorrectText);
+                        $trimmedText = trim($incorrectText);
+                        $normalizedKey = $this->normalizeOptionKey($trimmedText);
 
                         if ($normalizedKey === '' || isset($seen[$normalizedKey])) {
                             continue;
@@ -125,7 +127,7 @@ class QuizImporter
                         $seen[$normalizedKey] = true;
                         $optionRows[] = [
                             'quiz_blank_id' => $blank->id,
-                            'text' => $incorrectText,
+                            'text' => $trimmedText,
                             'is_correct' => false,
                             'created_at' => $now,
                             'updated_at' => $now,

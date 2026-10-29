@@ -74,6 +74,11 @@ class ExerciseExtractor
 
     private ?string $cachedPrompt = null;
 
+    /**
+     * @var array{model: ?string, input_tokens: ?int, output_tokens: ?int}|null
+     */
+    private ?array $lastUsage = null;
+
     public function __construct(
         ?string $apiKey = null,
         ?string $baseUrl = null,
@@ -142,6 +147,12 @@ class ExerciseExtractor
 
         $validated = $this->validate($decoded);
 
+        $this->lastUsage = [
+            'model' => $result['model'],
+            'input_tokens' => $result['input_tokens'],
+            'output_tokens' => $result['output_tokens'],
+        ];
+
         Log::info('Claude exercise extraction completed.', [
             'provider' => $this->provider->value,
             'model' => $result['model'],
@@ -166,6 +177,20 @@ class ExerciseExtractor
         $result = $this->send($this->buildPingPayload($prompt));
 
         return $result['text'];
+    }
+
+    /**
+     * Get the model and token usage recorded by the most recent extraction call.
+     *
+     * @return array{model: ?string, input_tokens: ?int, output_tokens: ?int}
+     */
+    public function getLastUsage(): array
+    {
+        return $this->lastUsage ?? [
+            'model' => $this->model !== '' ? $this->model : null,
+            'input_tokens' => null,
+            'output_tokens' => null,
+        ];
     }
 
     private function loadPrompt(): string
